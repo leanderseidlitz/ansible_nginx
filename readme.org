@@ -1,0 +1,44 @@
+* About this ansible role
+This nginx ansible role aims to provide both, configuration for reverseproxies as well as the terminating server.
+
+It enables advanced configuration szenarios, such as complex location to upstream configs, uwsgi and unix socket support as well as TLS client authentication. A server may listen on mutliple domains, optionally redirecting to the primary domain. HTTP basic authentication may be configured on a per-site basis.
+
+** Letsencrypt
+The role can retrieve, configure and maintain letsencrypt certificates. One certificate per site is retrieved, containing all additional domains.
+
+** Example Config
+#+BEGIN_SRC yaml
+nginx_workers: auto
+nginx_user: www-data
+nginx_revproxy_sites:
+  site.example.com: # FQDN of primary domain
+    location_to_upstream:
+      - {protocol: 'http', location: /, addrs: ['192.168.1.1:3000']}
+      - {protocol: 'https', location: /mult, addrs: ['192.168.1.1:3000', '192.168.1.2:3000'], upstream_location: '/prox', additonal_options: ['proxy_set_header X-Graylog-Server-URL https://$server_name/;']}
+      - {protocol: 'http', location: /asd, socket_path: '/lol/test'}
+      - {protocol: 'uwsgi', location: /asd2, socket_path: '/lol/uwsgi'}
+      - {protocol: 'uwsgi', location: /asd3, addrs: ['192.168.1.10:3000'], uwsgi_param_location: '/etc/nginx/specialparams'}
+      - {location: /static, webroot: '/var/www/static', client_max_body_size: '100M'}
+    additional_domains:
+      - site2.example.com
+      - site3.example.com
+    redirect_to_primary: true
+    port: {http: 80, https: 443}
+    ssl: {enable: false, pem_path: "", key_path: ""}
+    ssl_client_auth: {enable: true, ca_cert: '/etc/ssl/certs/ca.crt', force_cn: 'server.example.com'}
+    letsencrypt: {enabled: false, email: 'admin@example.com'}
+    hsts: {max_age: 63072000, includeSubDomains: true}
+    basic_auth: {user: 'user', password: 'pass', message: 'AUTHENTICATE'}
+    log: {syslog: false, access_fmt: 'combined', error_fmt: 'error'}
+    error_pages:
+      - { codes: ['502', '503'], location: "/usr/share/error", site: "/unavailable.html" }
+#+END_SRC
+** Example Minimal Config
+#+BEGIN_SRC yaml
+nginx_revproxy_sites:
+  site.example.com:
+    location_to_upstream:
+      - {protocol: 'http', location: /grafana, addrs: ['127.0.0.1:3000'], additional_options: ['proxy_set_header Authorization ""']}
+      - {protocol: 'http', location: /prometheus, addrs: ['127.0.0.1:9090'], upstream_location: /prometheus}
+    letsencrypt: {enabled: true, email: 'admin@site.com'}
+#+END_SRC

@@ -1,0 +1,133 @@
+- name: install nginx
+  apt:
+    name:
+      - nginx
+    state: present
+  tags:
+    - nginx_revproxy
+
+- name: install python3-passlib
+  apt:
+    name:
+      - python3-passlib
+    state: present
+  when: nginx_revproxy_sites |map('extract', nginx_revproxy_sites, 'basic_auth') |list |count > 0
+  tags:
+    - nginx_revproxy
+    
+- name: set up nginx directories
+  file:
+    path: "/etc/nginx/{{ item }}"
+    state: directory
+    owner: root
+    group: root
+    mode: 0755
+  with_items:
+    - sites-available
+    - sites-enabled
+  tags:
+    - nginx_revproxy
+
+- name: copy nginx config
+  template:
+    src: nginx.conf
+    dest: /etc/nginx/nginx.conf
+    owner: root
+    group: root
+  notify: restart nginx
+  tags:
+    - nginx_revproxy
+
+- name: add basic_auth
+  htpasswd:
+    path: "/etc/nginx/{{ item.key }}_htpasswd"
+    name: "{{ item.value.basic_auth.user }}"
+    password: "{{ item.value.basic_auth.password }}"
+  with_dict: "{{ nginx_revproxy_sites }}"
+  notify: restart nginx
+  when:
+    - item.value.basic_auth is defined
+  tags:
+    - nginxrevproxy
+
+- name: add site config
+  template:
+    src: reverseproxy.conf
+    dest: "/etc/nginx/sites-available/{{ item.key }}.conf"
+    owner: root
+    group: root
+  with_dict: "{{ nginx_revproxy_sites }}"
+  notify: restart nginx
+  register:
+    siteconfig
+  tags:
+    - nginx_revproxy
+
+- name: get active sites
+  command: ls -1 /etc/nginx/sites-enabled/
+  changed_when: "active.stdout_lines != nginx_revproxy_sites.keys()|sort()"
+  register: active
+  tags:
+    - nginx_revproxy
+
+- name: DEACTIVATE sites not deployed by ansible
+  file:
+    path: "/etc/nginx/sites-enabled/{{ item }}"
+    state: absent
+  with_items: "{{ active.stdout_lines }}"
+  notify: restart nginx
+  when:
+    - item not in nginx_revproxy_sites
+  tags:
+    - nginx_revproxy
+
+- name: ENABLE site config
+  file:
+    src: "/etc/nginx/sites-available/{{ item.key }}.conf"
+    dest: "/etc/nginx/sites-enabled/{{ item.key }}"
+    state: link
+  with_dict: "{{ nginx_revproxy_sites }}"
+  notify: restart nginx
+  when:
+    - siteconfig is success
+    - item.value.letsencrypt is not defined
+  tags:
+    - nginx_revproxy
+  
+- name: create webroot for sites that have one and fix permissions
+  file:
+    dest: "/var/www/{{ item[0].webroot }}"
+    mode: 0750
+    state: directory
+    owner: "{{ nginx_user |default('www-data') }}"
+    group: "{{ nginx_user |default('www-data') }}"
+    recurse: true
+  with_nested:
+    - "{{ nginx_revproxy_sites }}"
+    - "{{ location_upstreams }}"
+  when:
+    - item[0].webroot is defined
+  notify: restart nginx
+  tags:
+    - nginx_revproxy
+
+- name: Install certbot
+  apt:
+    package: certbot
+    state: present
+  when: nginx_revproxy_sites |map('extract', nginx_revproxy_sites, 'letsencrypt') |list |count > 0
+  tags:
+    - nginx_revproxy
+
+# We include these tasks (and therefore run certbot) if the site was newly added
+# To trigger a manual request of the cert, delete the site from the active sites
+# This means that all letsencrypt infra is set up only once but limits, that lets
+# encrypt cannot be added afterwards. To do so, the config on the server must be
+# disabled by hand and the playbook re-run
+- include: letsencrypt.yml
+  with_dict: "{{ nginx_revproxy_sites }}"
+  when:
+    - "item.key not in active.stdout_lines"
+    - "item.value.letsencrypt is defined"
+  tags:
+    - nginx_revproxy

@@ -1,0 +1,90 @@
+- name: create .well-know for letsencrypt sites
+  file:
+    dest: '/var/www/{{ item.key }}/.well-known'
+    mode: 0750
+    state: directory
+    owner: "{{ nginx_user |default('www-data') }}"
+    group: "{{ nginx_user |default('www-data') }}"
+  notify: restart nginx
+  tags:
+    - nginx_revproxy
+
+- name: copy site config for bootstrapping
+  template:
+    src: reverseproxy_bootstrap_letsencrypt.conf
+    dest: "/etc/nginx/sites-available/{{ item.key }}.conf"
+    owner: root
+    group: root
+  register: siteconfig
+  tags:
+    - nginx_revproxy
+
+- name: ENABLE site config
+  file:
+    src: "/etc/nginx/sites-available/{{ item.key }}.conf"
+    dest: "/etc/nginx/sites-enabled/{{ item.key }}"
+    state: link
+  notify: restart nginx
+  register: siteenable
+  when:
+    - siteconfig is success
+  tags:
+    - nginx_revproxy
+    
+- name: reload nginx before calling certbot
+  service:
+    name: nginx
+    state: reloaded
+  when: siteenable is success
+    
+- name: running certbot
+  command: |
+    certbot certonly
+    --webroot -w /var/www/{{ item.key }}
+    -d {{ item.key }}
+    {% if item.value.additional_domains is defined %}
+    -d {{ item.value.additional_domains | join(' -d ') }}
+    {% endif %}
+    --email {{ item.value.letsencrypt.email }}
+    --non-interactive --cert-name {{ item.key }}
+    --agree-tos creates=/etc/letsencrypt/live/{{ item.key }}/fullchain.pem
+  register: certbot
+  ignore_errors: yes
+  when:
+    - siteconfig is success
+    - siteenable is success
+  tags:
+    - nginx_revproxy
+
+- name: delete site config and disable for bootstrapping as certbot failed
+  file:
+    dest: "{{ file }}"
+    state: absent
+  with_items:
+    - "/etc/nginx/sites-available/{{ item.key }}.conf"
+    - "/etc/nginx/sites-enabled/{{ item.key }}"
+  loop_control:
+    loop_var: 'file'
+  when: certbot is failed
+  tags:
+    - nginx_revproxy
+
+- name: fail after cleanup as certbot has failed
+  fail:
+  when: certbot is failed
+  tags:
+    - nginx_revproxy
+
+- name: copy final site config
+  template:
+    src: reverseproxy.conf
+    dest: "/etc/nginx/sites-available/{{ item.key }}.conf"
+    owner: root
+    group: root
+  notify: restart nginx
+  register:
+    siteconfig
+  when:
+    - certbot is success
+  tags:
+    - nginx_revproxy
