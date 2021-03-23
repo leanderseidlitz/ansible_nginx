@@ -1,17 +1,19 @@
 * About this ansible role
 This nginx ansible role aims to provide both, configuration for reverseproxies as well as the terminating server.
 
-It enables advanced configuration szenarios, such as complex location to upstream configs, uwsgi and unix socket support as well as TLS client authentication. A server may listen on mutliple domains, optionally redirecting to the primary domain. HTTP basic authentication may be configured on a per-site basis.
+It enables advanced configuration szenarios, such as complex location to upstream configs, uwsgi and unix socket support as well as TLS client authentication. A server may listen on mutliple domains, optionally redirecting to the primary domain. HTTP basic authentication may be configured on a per-server basis.
+
+Note: A server is one server block in the nginx config.
 
 ** Letsencrypt
-The role can retrieve, configure and maintain letsencrypt certificates. One certificate per site is retrieved, containing all additional domains.
+The role can retrieve, configure and maintain letsencrypt certificates. One certificate per server is retrieved, containing all additional domains.
 
 ** Example Config
 #+BEGIN_SRC yaml
 nginx_workers: auto
 nginx_user: www-data
 nginx_revproxy_sites:
-  site.example.com: # FQDN of primary domain
+  site.example.com: # FQDN of primary domain (the domain this server responds on primarily)
     location_to_upstream:
       - {protocol: 'http', location: /, addrs: ['192.168.1.1:3000']}
       - {protocol: 'https', location: /mult, addrs: ['192.168.1.1:3000', '192.168.1.2:3000'], upstream_location: '/prox', additonal_options: ['proxy_set_header X-Graylog-Server-URL https://$server_name/;']}
@@ -41,4 +43,23 @@ nginx_revproxy_sites:
       - {protocol: 'http', location: /grafana, addrs: ['127.0.0.1:3000'], additional_options: ['proxy_set_header Authorization ""']}
       - {protocol: 'http', location: /prometheus, addrs: ['127.0.0.1:9090'], upstream_location: /prometheus}
     letsencrypt: {enabled: true, email: 'admin@site.com'}
+#+END_SRC
+** Example using listen addresses
+This example enforces authentication for external connections while allowing connections without authentication on localhost.
+#+BEGIN_SRC yaml
+nginx_revproxy_sites:
+  site.example.com:
+    listen: {ipv4: 192.168.10.1} # not specifying ipv6 will listen globally ([::])
+    location_to_upstream:
+      - {protocol: 'http', location: /grafana, addrs: ['127.0.0.1:3000'], additional_options: ['proxy_set_header Authorization ""']}
+      - {protocol: 'http', location: /prometheus, addrs: ['127.0.0.1:9090'], upstream_location: /prometheus}
+    letsencrypt: {enabled: true, email: 'admin@site.com'}
+    basic_auth: {user: 'user', password: 'pass, message: 'AUTHENTICATE'}
+    log: {syslog: true, access_fmt: 'graylog2_json' , error_fmt: 'error'}
+  site.example.com_: # trailing r'_+' will be stripped. This allows multiple servers with the same server name
+    listen: {ipv4: 127.0.0.1, ipv6: false} # ipv6 disabled
+    location_to_upstream:
+      - {protocol: 'http', location: /grafana, addrs: ['127.0.0.1:3000'], additional_options: ['proxy_set_header Authorization ""']}
+      - {protocol: 'http', location: /prometheus, addrs: ['127.0.0.1:9090'], upstream_location: /prometheus}
+    log: {syslog: true, access_fmt: 'graylog2_json' , error_fmt: 'error'}
 #+END_SRC
