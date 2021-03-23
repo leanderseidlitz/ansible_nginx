@@ -95,22 +95,22 @@
   tags:
     - nginx_revproxy
   
-- name: create webroot for sites that have one and fix permissions
-  file:
-    dest: "/var/www/{{ item[0].webroot }}"
-    mode: 0750
-    state: directory
-    owner: "{{ nginx_user |default('www-data') }}"
-    group: "{{ nginx_user |default('www-data') }}"
-    recurse: true
-  with_nested:
-    - "{{ nginx_revproxy_sites }}"
-    - "{{ location_upstreams }}"
-  when:
-    - item[0].webroot is defined
-  notify: restart nginx
-  tags:
-    - nginx_revproxy
+#- name: create webroot for sites that have one and fix permissions
+#  file:
+#    dest: "/var/www/{{ item[0].webroot }}"
+#    mode: 0750
+#    state: directory
+#    owner: "{{ nginx_user |default('www-data') }}"
+#    group: "{{ nginx_user |default('www-data') }}"
+#    recurse: true
+#  with_nested:
+#    - "{{ nginx_revproxy_sites }}"
+#    - "{{ location_upstreams }}"
+#  when:
+#    - item[0].webroot is defined
+#  notify: restart nginx
+#  tags:
+#    - nginx_revproxy
 
 - name: Install certbot
   apt:

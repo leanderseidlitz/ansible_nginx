@@ -1,6 +1,6 @@
 - name: create .well-know for letsencrypt sites
   file:
-    dest: '/var/www/{{ item.key }}/.well-known'
+    dest: '/var/www/{{ item.key |regex_replace("_+$", "") }}/.well-known'
     mode: 0750
     state: directory
     owner: "{{ nginx_user |default('www-data') }}"
@@ -36,12 +36,12 @@
     name: nginx
     state: reloaded
   when: siteenable is success
-    
+
 - name: running certbot
   command: |
     certbot certonly
-    --webroot -w /var/www/{{ item.key }}
-    -d {{ item.key }}
+    --webroot -w /var/www/{{ item.key |regex_replace("_+$", "") }}
+    -d {{ item.key |regex_replace("_+$", "") }}
     {% if item.value.additional_domains is defined %}
     -d {{ item.value.additional_domains | join(' -d ') }}
     {% endif %}
