@@ -67,6 +67,7 @@
   command: ls -1 /etc/nginx/sites-enabled/
   changed_when: "active.stdout_lines != nginx_revproxy_sites.keys()|sort()"
   register: active
+  check_mode: no
   tags:
     - nginx_revproxy
 
