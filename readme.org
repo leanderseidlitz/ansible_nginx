@@ -1,7 +1,9 @@
 * About this ansible role
 This nginx ansible role aims to provide both, configuration for reverseproxies as well as the terminating server.
 
-It enables advanced configuration szenarios, such as complex location to upstream configs, uwsgi and unix socket support as well as TLS client authentication. A server may listen on mutliple domains, optionally redirecting to the primary domain. HTTP basic authentication may be configured on a per-server basis.
+It enables advanced configuration scenarios, such as complex location to upstream configs, uwsgi and unix socket support as well as TLS client authentication (optionally enforcing a specific CN presented by the client). A server may listen on multiple domains, optionally redirecting to the primary domain. HTTP basic authentication may be configured on a per-server basis.
+
+This role is currently based on debian stable.
 
 Note: A server is one server block in the nginx config.
 
@@ -10,7 +12,7 @@ The role can retrieve, configure and maintain letsencrypt certificates. One cert
 
 If a server does not need its letsencrypt certificate anymore, this role will delete the certificate from certbot so it is not renewed. Only certificates created by this role will ever be possibly deleted.
 
-If the domains associated with a server change, the role will aquire new certificates for the respective server.
+If the domains associated with a server change, the role will acquire new certificates for the respective server.
 
 ** Example Config
 #+BEGIN_SRC yaml
