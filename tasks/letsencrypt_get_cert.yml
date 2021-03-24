@@ -1,6 +1,6 @@
 - name: create .well-know for letsencrypt sites
   file:
-    dest: '/var/www/{{ item.key |regex_replace("_+$", "") }}/.well-known'
+    dest: '/var/www/{{ item.fqdn_ }}/.well-known'
     mode: 0750
     state: directory
     owner: "{{ nginx_user |default('www-data') }}"
@@ -12,7 +12,7 @@
 - name: copy site config for bootstrapping
   template:
     src: reverseproxy_bootstrap_letsencrypt.conf
-    dest: "/etc/nginx/sites-available/{{ item.key }}.conf"
+    dest: "/etc/nginx/sites-available/{{ item.fqdn_ }}.conf"
     owner: root
     group: root
   register: siteconfig
@@ -21,8 +21,8 @@
 
 - name: ENABLE site config
   file:
-    src: "/etc/nginx/sites-available/{{ item.key }}.conf"
-    dest: "/etc/nginx/sites-enabled/{{ item.key }}"
+    src: "/etc/nginx/sites-available/{{ item.fqdn_ }}.conf"
+    dest: "/etc/nginx/sites-enabled/{{ item.fqdn_ }}"
     state: link
   notify: restart nginx
   register: siteenable
@@ -40,14 +40,15 @@
 - name: running certbot
   command: |
     certbot certonly
-    --webroot -w /var/www/{{ item.key |regex_replace("_+$", "") }}
-    -d {{ item.key |regex_replace("_+$", "") }}
-    {% if item.value.additional_domains is defined %}
-    -d {{ item.value.additional_domains | join(' -d ') }}
+    --webroot -w /var/www/{{ item.fqdn_ }}
+    -d {{ item.fqdn_ |regex_replace("_+$", "") }}
+    {% if item.additional_domains is defined %}
+    -d {{ item.additional_domains | join(' -d ') }}
     {% endif %}
-    --email {{ item.value.letsencrypt.email }}
-    --non-interactive --cert-name {{ item.key }}
-    --agree-tos creates=/etc/letsencrypt/live/{{ item.key }}/fullchain.pem
+    --email {{ item.letsencrypt.email }}
+    --non-interactive --cert-name {{ item.fqdn_ }}
+    --agree-tos
+# creates=/etc/letsencrypt/live/{{ item.fqdn_ }}/fullchain.pem # note: remove this so certbot is always run
   register: certbot
   ignore_errors: yes
   when:
@@ -56,13 +57,14 @@
   tags:
     - nginx_revproxy
 
-- name: delete site config and disable for bootstrapping as certbot failed
+- name: delete all artifacts of site as certbot FAILED
   file:
     dest: "{{ file }}"
     state: absent
   with_items:
-    - "/etc/nginx/sites-available/{{ item.key }}.conf"
-    - "/etc/nginx/sites-enabled/{{ item.key }}"
+    - "/etc/nginx/sites-available/{{ item.fqdn_ }}.conf"
+    - "/etc/nginx/sites-enabled/{{ item.fqdn_ }}"
+    - "/etc/nginx/.le_state/{{ item.fqdn_ }}"
   loop_control:
     loop_var: 'file'
   when: certbot is failed
@@ -78,7 +80,7 @@
 - name: copy final site config
   template:
     src: reverseproxy.conf
-    dest: "/etc/nginx/sites-available/{{ item.key }}.conf"
+    dest: "/etc/nginx/sites-available/{{ item.fqdn_ }}.conf"
     owner: root
     group: root
   notify: restart nginx

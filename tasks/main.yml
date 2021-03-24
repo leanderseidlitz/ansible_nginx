@@ -1,3 +1,8 @@
+- set_fact:
+    have_basic_auth_sites: "{{ nginx_revproxy_sites |json_query('[?basic_auth].fqdn_') |count > 0 }}"
+    letsencrypt_sites: "{{ nginx_revproxy_sites |json_query('[?letsencrypt.enabled].fqdn_') }}"
+    sites_fqdn_: "{{ nginx_revproxy_sites |json_query('[*].fqdn_') }}"
+    
 - name: install nginx
   apt:
     name:
@@ -11,7 +16,7 @@
     name:
       - python3-passlib
     state: present
-  when: nginx_revproxy_sites |map('extract', nginx_revproxy_sites, 'basic_auth') |list |count > 0
+  when: have_basic_auth_sites
   tags:
     - nginx_revproxy
     
@@ -40,23 +45,23 @@
 
 - name: add basic_auth
   htpasswd:
-    path: "/etc/nginx/{{ item.key }}_htpasswd"
-    name: "{{ item.value.basic_auth.user }}"
-    password: "{{ item.value.basic_auth.password }}"
-  with_dict: "{{ nginx_revproxy_sites }}"
+    path: "/etc/nginx/{{ item.fqdn_ }}_htpasswd"
+    name: "{{ item.basic_auth.user }}"
+    password: "{{ item.basic_auth.password }}"
+  loop: "{{ nginx_revproxy_sites }}"
   notify: restart nginx
   when:
-    - item.value.basic_auth is defined
+    - item.basic_auth is defined
   tags:
     - nginxrevproxy
 
 - name: add site config
   template:
     src: reverseproxy.conf
-    dest: "/etc/nginx/sites-available/{{ item.key }}.conf"
+    dest: "/etc/nginx/sites-available/{{ item.fqdn_ }}.conf"
     owner: root
     group: root
-  with_dict: "{{ nginx_revproxy_sites }}"
+  loop: "{{ nginx_revproxy_sites }}"
   notify: restart nginx
   register:
     siteconfig
@@ -65,7 +70,7 @@
 
 - name: get active sites
   command: ls -1 /etc/nginx/sites-enabled/
-  changed_when: "active.stdout_lines != nginx_revproxy_sites.keys()|sort()"
+  changed_when: "active.stdout_lines|sort() != sites_fqdn_|sort()"
   register: active
   check_mode: no
   tags:
@@ -73,62 +78,97 @@
 
 - name: DEACTIVATE sites not deployed by ansible
   file:
-    path: "/etc/nginx/sites-enabled/{{ item }}"
+    path: "/etc/nginx/sites-enabled/{{ item.fqdn_ }}"
     state: absent
   with_items: "{{ active.stdout_lines }}"
   notify: restart nginx
   when:
-    - item not in nginx_revproxy_sites
+    - item not in sites_fqdn_
   tags:
     - nginx_revproxy
 
 - name: ENABLE site config
   file:
-    src: "/etc/nginx/sites-available/{{ item.key }}.conf"
-    dest: "/etc/nginx/sites-enabled/{{ item.key }}"
+    src: "/etc/nginx/sites-available/{{ item.fqdn_ }}.conf"
+    dest: "/etc/nginx/sites-enabled/{{ item.fqdn_ }}"
     state: link
-  with_dict: "{{ nginx_revproxy_sites }}"
+  loop: "{{ nginx_revproxy_sites }}"
   notify: restart nginx
   when:
     - siteconfig is success
-    - item.value.letsencrypt is not defined
-  tags:
-    - nginx_revproxy
-  
-#- name: create webroot for sites that have one and fix permissions
-#  file:
-#    dest: "/var/www/{{ item[0].webroot }}"
-#    mode: 0750
-#    state: directory
-#    owner: "{{ nginx_user |default('www-data') }}"
-#    group: "{{ nginx_user |default('www-data') }}"
-#    recurse: true
-#  with_nested:
-#    - "{{ nginx_revproxy_sites }}"
-#    - "{{ location_upstreams }}"
-#  when:
-#    - item[0].webroot is defined
-#  notify: restart nginx
-#  tags:
-#    - nginx_revproxy
-
-- name: Install certbot
-  apt:
-    package: certbot
-    state: present
-  when: nginx_revproxy_sites |map('extract', nginx_revproxy_sites, 'letsencrypt') |list |count > 0
+    - not (item.letsencrypt.enabled |default(false))
   tags:
     - nginx_revproxy
 
-# We include these tasks (and therefore run certbot) if the site was newly added
-# To trigger a manual request of the cert, delete the site from the active sites
-# This means that all letsencrypt infra is set up only once but limits, that lets
-# encrypt cannot be added afterwards. To do so, the config on the server must be
-# disabled by hand and the playbook re-run
-- include: letsencrypt.yml
-  with_dict: "{{ nginx_revproxy_sites }}"
-  when:
-    - "item.key not in active.stdout_lines"
-    - "item.value.letsencrypt is defined"
+- name: get letsencrypt registered sites (if any)
+  command: ls -1 /etc/nginx/.le_state/
+  changed_when: False
+  register: le_registered
+  check_mode: no
   tags:
     - nginx_revproxy
+    
+- name: letsencrypt specific tasks
+  block: 
+    - name: save letsencrypt cert status
+      copy:
+        dest: "/etc/nginx/.le_state/{{ item.fqdn_ }}"
+        mode: 0400
+        owner: root
+        group: root
+        content: "{{ [item.fqdn_ |regex_replace('_+$', '')] |union( item.additional_domains |default([])) |sort |join(' ') |hash('sha256') }}"
+      register: le_active
+      loop: "{{ nginx_revproxy_sites }}"
+      when:
+        - item.letsencrypt.enabled |default(false)
+      tags:
+        - nginx_revproxy
+
+    - name: get unnecessary / updatable letsencrypt cert instances
+      set_fact:
+        le_update: "{{ le_active |json_query('results[?changed].item.fqdn_') }}"
+        le_delete: "{{ le_registered.stdout_lines |difference(letsencrypt_sites) }}"
+      tags:
+        - nginx_revproxy
+
+    - name: delete certbot certs we do not need anymore
+      command: "certbot delete --cert-name {{ item }}"
+      ignore_errors: yes      
+      loop: "{{ le_delete }}"
+      tags:
+        - nginx_revproxy        
+
+    - name: delete state files associated with deleted certbot certs
+      file:
+        dest: "/etc/nginx/.le_state/{{ item }}"
+        state: absent  
+      ignore_errors: yes      
+      loop: "{{ le_delete }}"
+      tags:
+        - nginx_revproxy        
+        
+    - name: Install certbot
+      apt:
+        package: certbot
+        state: present
+      when: letsencrypt_sites |count > 0
+      tags:
+        - nginx_revproxy
+
+    # We include these tasks (and therefore run certbot) if the
+    # domains associated with a site have changed. To trigger a manual
+    # request of the cert, delete the site from the
+    # /etc/nginx/.le_state on the server.
+    - include: letsencrypt_get_cert.yml
+      loop: "{{ le_update }}"
+      loop_control:
+        loop_var: 'host'
+      vars:
+        item: "{{ nginx_revproxy_sites |selectattr('fqdn_', 'equalto', host) |first }}"
+      tags:
+        - nginx_revproxy
+
+  when: (letsencrypt_sites |count > 0) or (le_registered |count > 0)
+  tags:
+    - nginx_revproxy
+    

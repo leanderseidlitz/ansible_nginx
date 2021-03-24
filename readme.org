@@ -8,12 +8,16 @@ Note: A server is one server block in the nginx config.
 ** Letsencrypt
 The role can retrieve, configure and maintain letsencrypt certificates. One certificate per server is retrieved, containing all additional domains.
 
+If a server does not need its letsencrypt certificate anymore, this role will delete the certificate from certbot so it is not renewed. Only certificates created by this role will ever be possibly deleted.
+
+If the domains associated with a server change, the role will aquire new certificates for the respective server.
+
 ** Example Config
 #+BEGIN_SRC yaml
 nginx_workers: auto
 nginx_user: www-data
 nginx_revproxy_sites:
-  site.example.com: # FQDN of primary domain (the domain this server responds on primarily)
+  - fqdn_: site.example.com: # FQDN of primary domain (the domain this server responds on primarily)
     location_to_upstream:
       - {protocol: 'http', location: /, addrs: ['192.168.1.1:3000']}
       - {protocol: 'https', location: /mult, addrs: ['192.168.1.1:3000', '192.168.1.2:3000'], upstream_location: '/prox', additonal_options: ['proxy_set_header X-Graylog-Server-URL https://$server_name/;']}
@@ -38,7 +42,7 @@ nginx_revproxy_sites:
 ** Example Minimal Config
 #+BEGIN_SRC yaml
 nginx_revproxy_sites:
-  site.example.com:
+  - fqdn_: site.example.com:
     location_to_upstream:
       - {protocol: 'http', location: /grafana, addrs: ['127.0.0.1:3000'], additional_options: ['proxy_set_header Authorization ""']}
       - {protocol: 'http', location: /prometheus, addrs: ['127.0.0.1:9090'], upstream_location: /prometheus}
@@ -48,7 +52,7 @@ nginx_revproxy_sites:
 This example enforces authentication for external connections while allowing connections without authentication on localhost.
 #+BEGIN_SRC yaml
 nginx_revproxy_sites:
-  site.example.com:
+  - fqdn_: site.example.com:
     listen: {ipv4: 192.168.10.1} # not specifying ipv6 will listen globally ([::])
     location_to_upstream:
       - {protocol: 'http', location: /grafana, addrs: ['127.0.0.1:3000'], additional_options: ['proxy_set_header Authorization ""']}
@@ -56,7 +60,7 @@ nginx_revproxy_sites:
     letsencrypt: {enabled: true, email: 'admin@site.com'}
     basic_auth: {user: 'user', password: 'pass, message: 'AUTHENTICATE'}
     log: {syslog: true, access_fmt: 'graylog2_json' , error_fmt: 'error'}
-  site.example.com_: # trailing r'_+' will be stripped. This allows multiple servers with the same server name
+  - fqdn_: site.example.com_: # trailing r'_+' will be stripped. This allows multiple servers with the same server name
     listen: {ipv4: 127.0.0.1, ipv6: false} # ipv6 disabled
     location_to_upstream:
       - {protocol: 'http', location: /grafana, addrs: ['127.0.0.1:3000'], additional_options: ['proxy_set_header Authorization ""']}
