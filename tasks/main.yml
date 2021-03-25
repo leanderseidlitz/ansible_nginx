@@ -100,6 +100,17 @@
   tags:
     - nginx_revproxy
 
+- name: create letsencrypt state dir
+  file:
+    path: "/etc/nginx/.le_state"
+    state: directory
+    owner: root
+    group: root
+    mode: 0755
+  when: letsencrypt_sites |count > 0
+  tags:
+    - nginx_revproxy
+
 - name: get letsencrypt registered sites (if any)
   command: ls -1 /etc/nginx/.le_state/
   changed_when: False
