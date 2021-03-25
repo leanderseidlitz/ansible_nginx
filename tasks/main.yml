@@ -116,9 +116,10 @@
   changed_when: False
   register: le_registered
   check_mode: no
+  when: letsencrypt_sites |count > 0
   tags:
     - nginx_revproxy
-    
+
 - name: letsencrypt specific tasks
   block: 
     - name: save letsencrypt cert status
@@ -143,7 +144,7 @@
         - nginx_revproxy
 
     - name: delete certbot certs we do not need anymore
-      command: "certbot delete --cert-name {{ item }}"
+      command: "certbot delete --non-interactive --cert-name {{ item }}"
       ignore_errors: yes      
       loop: "{{ le_delete }}"
       tags:
