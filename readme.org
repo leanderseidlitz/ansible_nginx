@@ -7,8 +7,11 @@ This role is currently based on debian stable.
 
 Note: A server is one server block in the nginx config.
 
+** Configuration Files
+This role expects to be the only entity configuring nginx on the respective host. It will disable all other sites_available (those that are not configured through this role), although it will not delete any configuration or files associated.
+
 ** Letsencrypt
-The role can retrieve, configure and maintain letsencrypt certificates. One certificate per server is retrieved, containing all additional domains.
+The role can retrieve, configure and maintain letsencrypt certificates. One certificate per server is retrieved, containing all additional_domains of that server.
 
 If a server does not need its letsencrypt certificate anymore, this role will delete the certificate from certbot so it is not renewed. Only certificates created by this role will ever be possibly deleted.
 
