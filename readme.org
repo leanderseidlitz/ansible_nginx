@@ -35,8 +35,8 @@ nginx_revproxy_sites:
       - site3.example.com
     redirect_to_primary: true
     port: {http: 80, https: 443}
-    ssl: {enable: false, pem_path: "", key_path: ""}
-    ssl_client_auth: {enable: true, ca_cert: '/etc/ssl/certs/ca.crt', force_cn: 'server.example.com'}
+    ssl: {enabled: false, pem_path: "", key_path: ""}
+    ssl_client_auth: {enabled: true, ca_cert: '/etc/ssl/certs/ca.crt', force_cn: 'server.example.com'}
     letsencrypt: {enabled: false, email: 'admin@example.com'}
     hsts: {max_age: 63072000, includeSubDomains: true}
     basic_auth: {user: 'user', password: 'pass', message: 'AUTHENTICATE'}
