@@ -180,7 +180,7 @@
       tags:
         - nginx_revproxy
 
-  when: (letsencrypt_sites |count > 0) or (le_registered |count > 0)
+  when: (letsencrypt_sites |count > 0) or (le_registered.stdout_lines |default([]) |count > 0)
   tags:
     - nginx_revproxy
     
