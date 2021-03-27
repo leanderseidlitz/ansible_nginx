@@ -2,6 +2,8 @@
     have_basic_auth_sites: "{{ nginx_revproxy_sites |json_query('[?basic_auth].fqdn_') |count > 0 }}"
     letsencrypt_sites: "{{ nginx_revproxy_sites |json_query('[?letsencrypt.enabled].fqdn_') }}"
     sites_fqdn_: "{{ nginx_revproxy_sites |json_query('[*].fqdn_') }}"
+  tags:
+    - nginx_revproxy
     
 - name: install nginx
   apt:
@@ -172,7 +174,7 @@
     # request of the cert, delete the site from the
     # /etc/nginx/.le_state on the server.
     - include: letsencrypt_get_cert.yml
-      loop: "{{ le_update }}"
+      loop: "{{ le_update |default([]) }}"
       loop_control:
         loop_var: 'host'
       vars:
