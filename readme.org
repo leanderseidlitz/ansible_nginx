@@ -7,6 +7,8 @@ This role is currently based on debian stable.
 
 Note: A server is one server block in the nginx config.
 
+Note: I found this role not to work with ansible 2.7.7 (current debian buster) as the default handling in jinja is different. Use ansible from buster-backports (> 2.9.16).
+
 ** Configuration Files
 This role expects to be the only entity configuring nginx on the respective host. It will disable all other sites_available (those that are not configured through this role), although it will not delete any configuration or files associated.
 
