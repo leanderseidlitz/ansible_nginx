@@ -74,3 +74,24 @@ nginx_revproxy_sites:
       - {protocol: 'http', location: /prometheus, addrs: ['127.0.0.1:9090'], upstream_location: /prometheus}
     log: {syslog: true, access_fmt: 'graylog2_json' , error_fmt: 'error'}
 #+END_SRC
+** Example using TLS client authentication
+You can configure upstream TLS, optionally with mutual authentication. The role does not take care of copying certificates to the servers.
+#+BEGIN_SRC yaml
+nginx_revproxy_sites:
+  - fqdn_: site1.example.com
+    location_to_upstream:
+      - {protocol: 'https', location: /, addrs: ['backend.example.com:443']}
+    # Presents a client certificate to the upstream, accepts upstream server certs of the specified CA
+    tls_to_upstream: {client_auth: true, cert: '/etc/ssl/web/site1.example.com.crt', key: '/etc/ssl/web/site1.example.com.key', cacert: '/etc/ssl/web/examplecom_webca.crt'}
+    letsencrypt: {enabled: true, email: 'admin@example.com'}
+    hsts: {max_age: 63072000, includeSubDomains: true}
+    log: {syslog: true, access_fmt: 'splunk_kv' , error_fmt: 'error'}
+  - fqdn_: site2.example.com
+    location_to_upstream:
+      - {protocol: 'https', location: /, addrs: ['10.0.0.3:8000']}
+    # Does not present a client certificate to the upstream, accepts upstream server certs of the specified CA
+    tls_to_upstream: {client_auth: false, cacert: '/etc/ssl/web/examplecom_webca.crt'}
+    letsencrypt: {enabled: true, email: 'admin@example.com'}
+    hsts: {max_age: 63072000, includeSubDomains: true}
+    log: {syslog: true, access_fmt: 'splunk_kv' , error_fmt: 'error'}
+#+END_SRC
