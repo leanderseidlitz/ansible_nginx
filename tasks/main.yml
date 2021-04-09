@@ -1,3 +1,9 @@
+- assert:
+    that: "ansible_version.full is version_compare('2.9', '>=')"
+    msg: >
+      This role requires at least ansible version 2.9.x.
+      If you are on debian buster, install ansible from buster-backports.
+
 - set_fact:
     have_basic_auth_sites: "{{ nginx_revproxy_sites |json_query('[?basic_auth].fqdn_') |count > 0 }}"
     letsencrypt_sites: "{{ nginx_revproxy_sites |json_query('[?letsencrypt.enabled].fqdn_') }}"
