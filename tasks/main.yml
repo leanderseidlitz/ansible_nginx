@@ -73,6 +73,7 @@
     dest: /etc/nginx/nginx.conf
     owner: root
     group: root
+    mode: 0640
   notify: restart nginx
   tags:
     - nginx_revproxy
@@ -95,6 +96,7 @@
     dest: "/etc/nginx/sites-available/{{ item.fqdn_ }}.conf"
     owner: root
     group: root
+    mode: 0640
   loop: "{{ nginx_revproxy_sites }}"
   notify: restart nginx
   register:
