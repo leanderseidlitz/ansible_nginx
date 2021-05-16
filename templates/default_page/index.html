@@ -1,0 +1,67 @@
+<!-- Adapted from https://github.com/helfertool/helfertool -->
+<!DOCTYPE html>
+<html lang="de">
+    <head>
+        <meta charset="UTF-8">
+        <meta http-equiv="X-UA-Compatible" content="IE=edge">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+
+	<title>{{ inventory_hostname }}</title>
+
+        <style>
+            body {
+                color: rgb(50, 50, 50);
+                background: rgb(245, 245, 245);
+                
+                text-align: center;
+                font-family: Helvetica,Arial,sans-serif;
+
+                padding: 0;
+                margin: 0;
+            }
+
+            p {
+                margin: 0;
+            }
+
+            #content {
+                padding: 3em 1em 1em 1em;
+            }
+
+            #title
+            {
+                font-size: 45px;
+                font-weight: bold;
+            }
+
+            #text {
+                font-size: 30px;
+                font-weight: normal;
+
+                margin-top: 1em;
+            }
+
+            #logo {
+                width: 300px;
+            }
+
+            @media (max-width: 700px) {
+                #content {
+                    padding-top: 1em;
+                }
+
+                #logo {
+                    width: 200px;
+                }
+            }
+        </style>
+    </head>
+
+    <body>
+        <div id="content">
+	    <p id="title">Hello, you stranded on the shores of {{ inventory_hostname }}...</p>
+            
+            <p id="text">Don't ask me how you got here, I'm lost as well...</p>
+        </div>
+    </body>
+</html>

@@ -81,7 +81,7 @@
 
 - name: copy final site config
   template:
-    src: reverseproxy.conf
+    src: "{{ 'default_reverseproxy.conf' if (item.serves_static_default |default(false)) else 'reverseproxy.conf' }}"
     dest: "/etc/nginx/sites-available/{{ item.fqdn_ }}.conf"
     owner: root
     group: root

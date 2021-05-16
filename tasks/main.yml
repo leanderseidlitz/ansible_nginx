@@ -6,6 +6,7 @@
 
 - set_fact:
     have_basic_auth_sites: "{{ nginx_revproxy_sites |json_query('[?basic_auth].fqdn_') |count > 0 }}"
+    have_default_page: "{{ nginx_revproxy_sites |json_query('[?serves_static_default].fqdn_') |count > 0 }}"
     letsencrypt_sites: "{{ nginx_revproxy_sites |json_query('[?letsencrypt.enabled].fqdn_') }}"
     sites_fqdn_: "{{ nginx_revproxy_sites |json_query('[*].fqdn_') }}"
   tags:
@@ -41,6 +42,31 @@
   tags:
     - nginx_revproxy
 
+- name: unavailable and host index page specific tasks
+  block:
+    - name: create directory for unavailable and host index page
+      file:
+        path: /var/www/nginx_static
+        state: directory
+        owner: "{{ nginx_user }}"
+        group: "{{ nginx_user }}"
+        mode: 0750
+      tags:
+        - nginx_revproxy
+
+    - name: copy unavailable and host index page
+      template:
+        src: "default_page/index.html"
+        dest: "/var/www/nginx_static/index.html"
+        owner: "{{ nginx_user }}"
+        group: "{{ nginx_user }}"
+        mode: 0640
+      tags:
+        - nginx_revproxy
+  when: have_default_page
+  tags:
+    - nginx_revproxy
+
 - name: copy nginx config
   template:
     src: nginx.conf
@@ -65,7 +91,7 @@
 
 - name: add site config
   template:
-    src: reverseproxy.conf
+    src: "{{ 'default_reverseproxy.conf' if (item.serves_static_default |default(false)) else 'reverseproxy.conf' }}"
     dest: "/etc/nginx/sites-available/{{ item.fqdn_ }}.conf"
     owner: root
     group: root
