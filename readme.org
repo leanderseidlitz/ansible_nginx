@@ -51,8 +51,8 @@ nginx_revproxy_sites:
 nginx_revproxy_sites:
   - fqdn_: site.example.com:
     location_to_upstream:
-      - {protocol: 'http', location: /grafana, addrs: ['127.0.0.1:3000'], additional_options: ['proxy_set_header Authorization ""']}
-      - {protocol: 'http', location: /prometheus, addrs: ['127.0.0.1:9090'], upstream_location: /prometheus}
+      - {protocol: 'http', location: /grafana, addrs: ['127.0.0.1:3000'], additional_options: ['proxy_set_header Authorization ""'], pass_normalized_uri: true}
+      - {protocol: 'http', location: /prometheus, addrs: ['127.0.0.1:9090'], upstream_location: /prometheus, pass_normalized_uri: true}
     letsencrypt: {enabled: true, email: 'admin@site.com'}
 #+END_SRC
 ** Example Minimal Config including catchall default site
