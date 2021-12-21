@@ -88,7 +88,7 @@
   when:
     - item.basic_auth is defined
   tags:
-    - nginxrevproxy
+    - nginx_revproxy
 
 - name: add site config
   template:
