@@ -203,14 +203,6 @@
       tags:
         - nginx_revproxy
 
-    - name: Install letsencrypt post-renew hook
-      copy:
-        src: post-renew-hook-nginx.sh
-        dest: /etc/letsencrypt/renewal-hooks/deploy/post-renew-hook-nginx.sh
-        owner: root
-        group: root
-        mode: 0755
-
     # We include these tasks (and therefore run certbot) if the
     # domains associated with a site have changed. To trigger a manual
     # request of the cert, delete the site from the
@@ -223,6 +215,14 @@
         item: "{{ nginx_revproxy_sites |selectattr('fqdn_', 'equalto', host) |first }}"
       tags:
         - nginx_revproxy
+
+    - name: Install letsencrypt post-renew hook
+      copy:
+        src: post-renew-hook-nginx.sh
+        dest: /etc/letsencrypt/renewal-hooks/deploy/post-renew-hook-nginx.sh
+        owner: root
+        group: root
+        mode: 0755
 
   when: (letsencrypt_sites |count > 0) or (le_registered.stdout_lines |default([]) |count > 0)
   tags:
