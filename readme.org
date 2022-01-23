@@ -107,3 +107,19 @@ nginx_revproxy_sites:
     hsts: {max_age: 63072000, includeSubDomains: true}
     log: {syslog: true, access_fmt: 'splunk_kv' , error_fmt: 'error'}
 #+END_SRC
+
+** Example with alias
+You can configure some resources to be served locally by either using the above webroot statements, or alias statements.
+#+BEGIN_SRC yaml
+nginx_revproxy_sites:
+  - fqdn_: site1.example.com
+    location_to_upstream:
+      - {location: "/mailman3/static/favicon.ico", alias: "/var/lib/mailman3/web/static/postorius/img/favicon.ico", no_trail_slash: true}
+      - {location: "/mailman3/static", alias: "/var/lib/mailman3/web/static"}
+      - {protocol: 'https', location: /, addrs: ['backend.example.com:443']}
+    # Presents a client certificate to the upstream, accepts upstream server certs of the specified CA
+    tls_to_upstream: {client_auth: true, cert: '/etc/ssl/web/site1.example.com.crt', key: '/etc/ssl/web/site1.example.com.key', cacert: '/etc/ssl/web/examplecom_webca.crt'}
+    letsencrypt: {enabled: true, email: 'admin@example.com'}
+    hsts: {max_age: 63072000, includeSubDomains: true}
+    log: {syslog: true, access_fmt: 'splunk_kv' , error_fmt: 'error'}
+#+END_SRC
