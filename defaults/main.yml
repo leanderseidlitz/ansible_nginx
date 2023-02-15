@@ -1,2 +1,12 @@
 nginx_workers: auto
 nginx_user: www-data
+
+# if nginx_*_sites are set in host/group_vars, these default values are overwritten
+nginx_revproxy_sites: []
+nginx_redirect_sites: []
+nginx_sites: "{{ nginx_revproxy_sites | combine(nginx_redirect_sites, list_merge='append') }}"
+
+have_basic_auth_sites: "{{ nginx_revproxy_sites | json_query('[?basic_auth].fqdn_') | count > 0 }}"
+have_default_page: "{{ nginx_revproxy_sites | json_query('[?serves_static_default].fqdn_') | count > 0 }}"
+letsencrypt_sites: "{{ nginx_sites | json_query('[?letsencrypt.enabled].fqdn_') }}"
+sites_fqdn_: "{{ nginx_sites | map(attribute='fqdn_') }}"

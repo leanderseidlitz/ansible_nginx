@@ -1,18 +1,12 @@
-- assert:
+---
+- name: Fail when ansible version is not sufficient
+  assert:
     that: "ansible_version.full is version_compare('2.9', '>=')"
     msg: >
       This role requires at least ansible version 2.9.x.
       If you are on debian buster, install ansible from buster-backports.
 
-- set_fact:
-    have_basic_auth_sites: "{{ nginx_revproxy_sites |json_query('[?basic_auth].fqdn_') |count > 0 }}"
-    have_default_page: "{{ nginx_revproxy_sites |json_query('[?serves_static_default].fqdn_') |count > 0 }}"
-    letsencrypt_sites: "{{ nginx_revproxy_sites |json_query('[?letsencrypt.enabled].fqdn_') }}"
-    sites_fqdn_: "{{ nginx_revproxy_sites |json_query('[*].fqdn_') }}"
-  tags:
-    - nginx_revproxy
-    
-- name: install nginx
+- name: Install nginx
   apt:
     name:
       - nginx
@@ -20,7 +14,7 @@
   tags:
     - nginx_revproxy
 
-- name: install python3-passlib
+- name: Install python3-passlib
   apt:
     name:
       - python3-passlib
@@ -28,8 +22,8 @@
   when: have_basic_auth_sites
   tags:
     - nginx_revproxy
-    
-- name: set up nginx directories
+
+- name: Set up nginx directories
   file:
     path: "/etc/nginx/{{ item }}"
     state: directory
@@ -42,9 +36,12 @@
   tags:
     - nginx_revproxy
 
-- name: unavailable and host index page specific tasks
+- name: Unavailable and host index page specific tasks
+  when: have_default_page
+  tags:
+    - nginx_revproxy
   block:
-    - name: create directory for unavailable and host index page
+    - name: Create directory for unavailable and host index page
       file:
         path: /var/www/nginx_static
         state: directory
@@ -54,7 +51,7 @@
       tags:
         - nginx_revproxy
 
-    - name: copy unavailable and host index page
+    - name: Copy unavailable and host index page
       template:
         src: "default_page/index.html"
         dest: "/var/www/nginx_static/index.html"
@@ -63,52 +60,63 @@
         mode: 0640
       tags:
         - nginx_revproxy
-  when: have_default_page
-  tags:
-    - nginx_revproxy
 
-- name: copy nginx config
+- name: Copy nginx config
   template:
     src: nginx.conf
     dest: /etc/nginx/nginx.conf
     owner: root
     group: root
     mode: 0640
-  notify: restart nginx
+  notify: Restart nginx
   tags:
     - nginx_revproxy
 
-- name: add basic_auth
+- name: Add basic_auth
   htpasswd:
     path: "/etc/nginx/{{ item.fqdn_ }}_htpasswd"
     name: "{{ item.basic_auth.user }}"
     password: "{{ item.basic_auth.password }}"
   loop: "{{ nginx_revproxy_sites }}"
-  notify: restart nginx
+  notify: Restart nginx
   when:
     - item.basic_auth is defined
   tags:
     - nginx_revproxy
 
-- name: add site config
+- name: Add revproxy site config
   template:
-    src: "{{ 'default_reverseproxy.conf' if (item.serves_static_default |default(false)) else 'reverseproxy.conf' }}"
+    src: "{{ 'default_reverseproxy.conf' if (item.serves_static_default | default(false)) else 'reverseproxy.conf' }}"
     dest: "/etc/nginx/sites-available/{{ item.fqdn_ }}.conf"
     owner: root
     group: root
     mode: 0640
   loop: "{{ nginx_revproxy_sites }}"
-  notify: restart nginx
+  notify: Restart nginx
   register:
     siteconfig
   tags:
     - nginx_revproxy
 
-- name: get active sites
+- name: Add redirect site config
+  template:
+    src: "redirect.conf"
+    dest: "/etc/nginx/sites-available/{{ item.fqdn_ }}.conf"
+    owner: root
+    group: root
+    mode: 0640
+  loop: "{{ nginx_redirect_sites }}"
+  notify: Restart nginx
+  register:
+    siteconfig
+  tags:
+    - nginx_revproxy
+
+- name: Get active sites
   command: ls -1 /etc/nginx/sites-enabled/
-  changed_when: "active.stdout_lines|sort() != sites_fqdn_|sort()"
+  changed_when: false
   register: active
-  check_mode: no
+  check_mode: false
   tags:
     - nginx_revproxy
 
@@ -117,7 +125,7 @@
     path: "/etc/nginx/sites-enabled/{{ item }}"
     state: absent
   with_items: "{{ active.stdout_lines }}"
-  notify: restart nginx
+  notify: Restart nginx
   when:
     - item not in sites_fqdn_
   tags:
@@ -128,78 +136,82 @@
     src: "/etc/nginx/sites-available/{{ item.fqdn_ }}.conf"
     dest: "/etc/nginx/sites-enabled/{{ item.fqdn_ }}"
     state: link
-  loop: "{{ nginx_revproxy_sites }}"
-  notify: restart nginx
+  loop: "{{ nginx_sites }}"
+  notify: Restart nginx
   when:
     - siteconfig is success
-    - not (item.letsencrypt.enabled |default(false))
+    - not (item.letsencrypt.enabled | default(false))
   tags:
     - nginx_revproxy
 
-- name: create letsencrypt state dir
+- name: Create letsencrypt state dir
   file:
     path: "/etc/nginx/.le_state"
     state: directory
     owner: root
     group: root
     mode: 0755
-  when: letsencrypt_sites |count > 0
+  when: letsencrypt_sites | count > 0
   tags:
     - nginx_revproxy
 
-- name: get letsencrypt registered sites (if any)
+- name: Get letsencrypt registered sites (if any)
   command: ls -1 /etc/nginx/.le_state/
-  changed_when: False
+  changed_when: false
   register: le_registered
-  check_mode: no
-  when: letsencrypt_sites |count > 0
+  check_mode: false
+  when: letsencrypt_sites | count > 0
   tags:
     - nginx_revproxy
 
-- name: letsencrypt specific tasks
-  block: 
-    - name: save letsencrypt cert status
+- name: Letsencrypt specific tasks
+  when: (letsencrypt_sites | count > 0) or (le_registered.stdout_lines | default([]) | count > 0)
+  tags:
+    - nginx_revproxy
+  block:
+    - name: Save letsencrypt cert status
       copy:
         dest: "/etc/nginx/.le_state/{{ item.fqdn_ }}"
         mode: 0400
         owner: root
         group: root
-        content: "{{ [item.fqdn_ |regex_replace('_+$', '')] |union( item.additional_domains |default([])) |sort |join(' ') |hash('sha256') }}"
+        content: "{{ [item.fqdn_ | regex_replace('_+$', '')] | union(item.additional_domains | default([])) | sort | join(' ') | hash('sha256') }}"
       register: le_active
-      loop: "{{ nginx_revproxy_sites }}"
+      loop: "{{ nginx_sites }}"
       when:
-        - item.letsencrypt.enabled |default(false)
+        - item.letsencrypt.enabled | default(false)
       tags:
         - nginx_revproxy
 
-    - name: get unnecessary / updatable letsencrypt cert instances
+    - name: Get unnecessary / updatable letsencrypt cert instances
       set_fact:
-        le_update: "{{ le_active |json_query('results[?changed].item.fqdn_') }}"
-        le_delete: "{{ le_registered.stdout_lines |difference(letsencrypt_sites) }}"
+        le_update: "{{ le_active | json_query('results[?changed].item.fqdn_') }}"
+        le_delete: "{{ le_registered.stdout_lines | difference(letsencrypt_sites) }}"
       tags:
         - nginx_revproxy
 
-    - name: delete certbot certs we do not need anymore
+    - name: Delete certbot certs we do not need anymore
       command: "certbot delete --non-interactive --cert-name {{ item }}"
-      ignore_errors: yes      
+      ignore_errors: true
       loop: "{{ le_delete }}"
+      changed_when: true
       tags:
-        - nginx_revproxy        
+        - nginx_revproxy
 
-    - name: delete state files associated with deleted certbot certs
+    - name: Delete state files associated with deleted certbot certs
       file:
         dest: "/etc/nginx/.le_state/{{ item }}"
-        state: absent  
-      ignore_errors: yes      
+        state: absent
+      ignore_errors: true
       loop: "{{ le_delete }}"
       tags:
-        - nginx_revproxy        
-        
+        - nginx_revproxy
+
     - name: Install certbot
       apt:
         package: certbot
         state: present
-      when: letsencrypt_sites |count > 0
+      when: letsencrypt_sites | count > 0
       tags:
         - nginx_revproxy
 
@@ -207,12 +219,13 @@
     # domains associated with a site have changed. To trigger a manual
     # request of the cert, delete the site from the
     # /etc/nginx/.le_state on the server.
-    - include: letsencrypt_get_cert.yml
-      loop: "{{ le_update |default([]) }}"
+    - name: Include certbot tasks
+      include_tasks: letsencrypt_get_cert.yml
+      loop: "{{ le_update | default([]) }}"
       loop_control:
         loop_var: 'host'
       vars:
-        item: "{{ nginx_revproxy_sites |selectattr('fqdn_', 'equalto', host) |first }}"
+        item: "{{ nginx_sites | selectattr('fqdn_', 'equalto', host) | first }}"
       tags:
         - nginx_revproxy
 
@@ -223,8 +236,3 @@
         owner: root
         group: root
         mode: 0755
-
-  when: (letsencrypt_sites |count > 0) or (le_registered.stdout_lines |default([]) |count > 0)
-  tags:
-    - nginx_revproxy
-    
