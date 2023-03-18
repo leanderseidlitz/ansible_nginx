@@ -216,6 +216,13 @@
       tags:
         - nginx_revproxy
 
+
+    - name: Create renewal hook directory
+      file:
+        path: /etc/letsencrypt/renewal-hooks/deploy/
+        state: directory
+
+
     - name: Install letsencrypt post-renew hook
       copy:
         src: post-renew-hook-nginx.sh
