@@ -27,7 +27,7 @@ nginx_revproxy_sites:
   - fqdn_: site.example.com: # FQDN of primary domain (the domain this server responds on primarily)
     location_to_upstream:
       - {protocol: 'http', location: /, addrs: ['192.168.1.1:3000']}
-      - {protocol: 'https', location: /mult, addrs: ['192.168.1.1:3000', '192.168.1.2:3000'], upstream_location: '/prox', additonal_options: ['proxy_set_header X-Graylog-Server-URL https://$server_name/;']}
+      - {protocol: 'https', location: /mult, addrs: ['192.168.1.1:3000', '192.168.1.2:3000'], upstream_location: '/prox', additional_options: ['proxy_set_header X-Graylog-Server-URL https://$server_name/;']}
       - {protocol: 'http', location: /asd, socket_path: '/lol/test'}
       - {protocol: 'uwsgi', location: /asd2, socket_path: '/lol/uwsgi'}
       - {protocol: 'uwsgi', location: /asd3, addrs: ['192.168.1.10:3000'], uwsgi_param_location: '/etc/nginx/specialparams'}
